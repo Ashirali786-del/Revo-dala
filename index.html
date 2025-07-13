@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Truck Game - Auto Restart</title>
+  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      background: #87CEEB;
+      overflow: hidden;
+    }
+
+    .scene {
+      display: flex;
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    .green-side {
+      flex: 1;
+      background: linear-gradient(#ffffff, #ffffff);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .road {
+      width: 30%;
+      background: #333;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .line {
+      position: absolute;
+      left: 50%;
+      top: -100%;
+      width: 6px;
+      height: 300%;
+      background: repeating-linear-gradient(
+        to bottom,
+        white 0 30px,
+        transparent 30px 60px
+      );
+      transform: translateX(-50%);
+      z-index: 1;
+    }
+
+    model-viewer {
+      position: absolute;
+      top: 60%;
+      left: 50%;
+      width: 220px;
+      height: 220px;
+      transform: translate(-50%, -50%);
+      z-index: 2;
+      transition: left 0.2s ease-in-out;
+    }
+
+    .tree {
+      position: absolute;
+      width: 220px;
+      height: auto;
+    }
+
+    .tree.left { left: 60%; }
+    .tree.right { right:60%; } 
+
+    .controls {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+    }
+
+    .controls button {
+      padding: 10px 20px;
+      font-size: 18px;
+      margin: 0 10px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      background: #ff9800;
+      color: white;
+    }
+
+    .controls button:hover {
+      background: #e68900;
+    }
+
+    .obstacle {
+      position: absolute;
+      width: 90px;
+      height: 90px;
+      background: url(download.jpeg) no-repeat center;
+      background-size: cover;
+      top: -20%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+    }
+
+    .hitbox {
+      position: absolute;
+      top: 60%;
+      left: 50%;
+      width: 50px;
+      height: 50px;
+      transform: translate(-50%, -50%);
+      z-index: 4;
+      pointer-events: none;
+    }
+
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 20px;
+      font-size: 22px;
+      color: #fff;
+      background: #000000a0;
+      padding: 8px 16px;
+      border-radius: 8px;
+      z-index: 10;
+      font-family: sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <!-- Score Display -->
+  <div id="score">Distance: <span id="distance">0</span>m</div>
+
+  <div class="scene">
+    <!-- Left Trees -->
+    <div class="green-side" id="leftGreen">
+      <img src="download (2).png" class="tree left" style="top: 0%;" />
+      <img src="download (2).png" class="tree left" style="top: 30%;" />
+      <img src="download (2).png" class="tree left" style="top: 60%;" />
+      <img src="download (2).png" class="tree left" style="top: 90%;" />
+    </div>
+
+    <!-- Road -->
+    <div class="road">
+      <div class="line" id="roadLine"></div>
+    </div>
+
+    <!-- Right Trees -->
+    <div class="green-side" id="rightGreen">
+      <img src="download (2).png" class="tree right" style="top: 0%;" />
+      <img src="download (2).png" class="tree right" style="top: 30%;" />
+      <img src="download (2).png" class="tree right" style="top: 60%;" />
+      <img src="download (2).png" class="tree right" style="top: 90%;" />
+    </div>
+
+    <!-- Truck Model -->
+    <model-viewer id="truck" 
+      src="nissan_4x4.glb" 
+      orientation="0deg -40deg 180deg"></model-viewer>
+
+    <!-- Hitbox -->
+    <div class="hitbox" id="hitbox"></div>
+
+    <!-- Controls -->
+    <div class="controls">
+      <button onclick="startMoving()">SPEED</button>
+      <button onclick="stopMoving()">BRAKE</button>
+    </div>
+  </div>
+
+  <script>
+    let speed = 2;
+    let animation;
+    let truckLeft = 50;
+    let linePos = -100;
+    let score = 0;
+
+    const truck = document.getElementById("truck");
+    const hitbox = document.getElementById("hitbox");
+    const line = document.getElementById("roadLine");
+    const leftTrees = document.querySelectorAll("#leftGreen .tree");
+    const rightTrees = document.querySelectorAll("#rightGreen .tree");
+    const scoreDisplay = document.getElementById("distance");
+
+    // Obstacles
+    let obstacles = [];
+    let obstacleTops = [];
+
+    function createObstacle(i) {
+      const obs = document.createElement("div");
+      obs.className = "obstacle";
+      document.querySelector(".road").appendChild(obs);
+      obstacles[i] = obs;
+      obstacleTops[i] = -Math.random() * 100;
+      resetObstaclePosition(i);
+    }
+
+    function resetObstaclePosition(i) {
+      obstacleTops[i] = -Math.random() * 100;
+      let left = 40 + Math.random() * 20;
+      obstacles[i].style.left = left + "%";
+      obstacles[i].style.top = obstacleTops[i] + "%";
+    }
+
+    function moveObstacles() {
+      for (let i = 0; i < obstacles.length; i++) {
+        obstacleTops[i] += speed * 0.5;
+        if (obstacleTops[i] > 120) {
+          resetObstaclePosition(i);
+        } else {
+          obstacles[i].style.top = obstacleTops[i] + "%";
+        }
+      }
+    }
+
+    function checkCollisions() {
+      hitbox.style.left = truckLeft + "%";
+      const truckRect = hitbox.getBoundingClientRect();
+
+      for (let i = 0; i < obstacles.length; i++) {
+        const obsRect = obstacles[i].getBoundingClientRect();
+        if (
+          truckRect.left < obsRect.right &&
+          truckRect.right > obsRect.left &&
+          truckRect.top < obsRect.bottom &&
+          truckRect.bottom > obsRect.top
+        ) {
+          stopMoving();
+          alert("💥 Crash! Game Over.\n🏁 Your Distance: " + score + "m");
+
+          // Restart after 2 seconds
+          setTimeout(() => {
+            score = 0;
+            truckLeft = 50;
+            truck.style.left = truckLeft + "%";
+            hitbox.style.left = truckLeft + "%";
+            scoreDisplay.textContent = "0";
+
+            for (let j = 0; j < obstacles.length; j++) {
+              resetObstaclePosition(j);
+            }
+
+            startMoving();
+          }, 2000);
+
+          return;
+        }
+      }
+    }
+
+    function moveRoad() {
+      // Road Line
+      linePos += speed;
+      if (linePos >= 0) linePos = -100;
+      line.style.top = linePos + "%";
+
+      // Trees
+      [leftTrees, rightTrees].forEach(trees => {
+        trees.forEach(tree => {
+          let top = parseFloat(tree.style.top);
+          top += speed * 0.3;
+          if (top > 120) top = -20;
+          tree.style.top = top + "%";
+        });
+      });
+
+      // Obstacles
+      moveObstacles();
+      checkCollisions();
+
+      // Score
+      score += 1;
+      scoreDisplay.textContent = score;
+
+      animation = requestAnimationFrame(moveRoad);
+    }
+
+    function startMoving() {
+      if (!animation) animation = requestAnimationFrame(moveRoad);
+    }
+
+    function stopMoving() {
+      cancelAnimationFrame(animation);
+      animation = null;
+    }
+
+    // Keyboard Controls
+    document.addEventListener("keydown", function (e) {
+      const key = e.key.toLowerCase();
+      if (key === 'w') startMoving();
+      else if (key === 's') stopMoving();
+      else if (key === 'a' && truckLeft > 40) {
+        truckLeft -= 2;
+        truck.style.left = truckLeft + "%";
+        hitbox.style.left = truckLeft + "%";
+      } else if (key === 'd' && truckLeft < 60) {
+        truckLeft += 2;
+        truck.style.left = truckLeft + "%";
+        hitbox.style.left = truckLeft + "%";
+      }
+    });
+
+    // Create 3 obstacles on load
+    for (let i = 0; i < 3; i++) {
+      createObstacle(i);
+    }
+  </script>
+</body>
+</html>
